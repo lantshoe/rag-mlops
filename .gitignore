@@ -1,0 +1,6 @@
+# Ignore checkpoint files
+*.ckpt
+*.h5
+*.pt
+.ipynb_checkpoints/
+.DS_Store
