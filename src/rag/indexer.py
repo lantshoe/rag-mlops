@@ -1,5 +1,17 @@
-import faiss
+"""
+indexer.py
+--------
+Responsible for building and researching a FAISS vector index.
 
+Uses IndexFlatIP with L2 normalization,
+which is equivalent to cosine similarity search - measuring semantic
+direction between vectors rather than their magnitude.
+
+- build: embed all chunks -> normalize -> add to FAISS index
+- search: embed query -> normalize -> find top-k similar chunks
+
+"""
+import faiss
 from src.rag.embedder import Embedder
 
 

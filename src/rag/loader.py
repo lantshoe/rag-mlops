@@ -1,3 +1,12 @@
+"""
+loader.py
+--------
+Responsible for loading and chunking documents for RAG pipeline.
+
+- load_documents: read a document file and returns LlamaIndex Document objects
+- split_documents: split documents into smaller chunks for embedding and retrieval.
+
+"""
 from llama_index.core import SimpleDirectoryReader
 from llama_index.core.node_parser import SentenceSplitter
 from pathlib import Path
