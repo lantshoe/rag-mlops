@@ -17,6 +17,8 @@ class QueryRequest(BaseModel):
 class ChunkResult(BaseModel):
     text: str
     score: float
+    source: str
+    chunk_id: int
 
 
 class QueryResponse(BaseModel):
