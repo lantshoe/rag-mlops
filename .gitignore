@@ -12,7 +12,7 @@ indexes/
 *.faiss
 *.bin
 *.pt
-training/checkpoints/
-training/mlruns/
-training/mlflow.db
+src/training/checkpoints/
+src/training/mlruns/
+src/training/mlflow.db
 models/
