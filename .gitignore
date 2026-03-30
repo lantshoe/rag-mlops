@@ -1,4 +1,3 @@
-# Ignore checkpoint files
 *.ckpt
 *.h5
 *.pt
@@ -13,3 +12,7 @@ indexes/
 *.faiss
 *.bin
 *.pt
+training/checkpoints/
+training/mlruns/
+training/mlflow.db
+models/

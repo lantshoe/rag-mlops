@@ -66,7 +66,8 @@ def feedback(request: FeedbackRequest):
         answer=request.answer,
         score=request.score,
         pipeline=request.pipeline,
-        comment=request.comment
+        comment=request.comment,
+        retrieved_chunks = request.retrieved_chunks
     )
 
     count = get_feedback_count()

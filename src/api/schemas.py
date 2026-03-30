@@ -33,4 +33,5 @@ class FeedbackRequest(BaseModel):
     answer: str
     score: float
     pipeline: str
-    comment: str
+    comment: str = ""
+    retrieved_chunks: list = []
