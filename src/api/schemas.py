@@ -18,6 +18,7 @@ class ChunkResult(BaseModel):
     text: str
     score: float
     source: str
+    reranker_score: float
     chunk_id: int
 
 

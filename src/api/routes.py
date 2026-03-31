@@ -44,7 +44,9 @@ def query(request: QueryRequest) -> QueryResponse:
             answer=result['answer'],
             pipeline=request.pipeline,
             retrieved_chunks=[
-                ChunkResult(text=c["text"], score=c["score"], source=c["source"], chunk_id=c["chunk_id"])
+                ChunkResult(text=c["text"], score=c["score"],
+                            source=c["source"], reranker_score=c.get("reranker_score"),
+                            chunk_id=c["chunk_id"])
                 for c in result["retrieved_chunks"]
             ]
         )
