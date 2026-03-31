@@ -13,6 +13,22 @@ Training data comes from user feedback:
 - Low score  (1-2) → the retrieved chunks were not relevant → negative examples
 
 The trained model is saved to disk and logged to MLflow for version tracking.
+
+User gives score 4 to a good answer
+     ↓
+Saved to PostgreSQL with retrieved chunks
+     ↓
+train_reranker() reads this feedback
+     ↓
+Teaches CrossEncoder: "these chunks were relevant for this question"
+     ↓
+Next time user asks similar question
+     ↓
+CrossEncoder ranks the relevant chunks higher
+     ↓
+LLM gets better context → generates better answer
+     ↓
+User gives score 5 → even more training data
 """
 import json
 import os
@@ -56,8 +72,10 @@ def prepare_training_data(feedback_list) -> list:
 
         if not chunks:
             continue
+        #  good, label as positive
         if score >= 4:
             label = 1.0
+        #   bad, label as negative
         elif score <= 2:
             label = 0.0
         else:
@@ -67,14 +85,16 @@ def prepare_training_data(feedback_list) -> list:
             text = chunk["text"]
             if not text:
                 continue
+            # if a user gave score 4 to a query, we tell the model that
+            # when you see the question and chunk together, output score close to 1
             training_samples.append(
+                # question and chunk together, so that the self attention encoder can read question and answer together to have a better understand
                 InputExample(texts=[question, text], label=label)
             )
     return training_samples
 
 def train_reranker(min_samples: int = 10):
     os.makedirs(RERANKER_MODEL_PATH, exist_ok=True)
-
 
     feedback_list = get_all_feedback()
     if not feedback_list:
@@ -88,7 +108,9 @@ def train_reranker(min_samples: int = 10):
 
     print(f"Training samples: {len(training_samples)}")
     print(f"Reranking model: {RERANKER_MODEL_PATH}")
-
+    # We start from `cross-encoder/ms-marco-MiniLM-L-6-v2`
+    # — a pre-trained CrossEncoder that already understands relevance scoring.
+    # We fine-tune it on our specific domain (OS concepts) using feedback data.
     model = CrossEncoder(BASE_MODEL, num_labels=1)
     train_dataloader = DataLoader(training_samples, shuffle=True, batch_size=8)
 
