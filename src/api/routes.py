@@ -14,6 +14,7 @@ from src.api.schemas import QueryRequest, QueryResponse, ChunkResult, FeedbackRe
 from src.feedback.collector import save_feedback, get_feedback_count
 from src.rag.pipeline import RAGPipeline
 from src.llamaindex.pipeline import LlamaIndexPipeline
+from src.training.scheduler import check_threshold_trigger
 
 router = APIRouter()
 
@@ -71,6 +72,7 @@ def feedback(request: FeedbackRequest):
         comment=request.comment,
         retrieved_chunks = request.retrieved_chunks
     )
+    check_threshold_trigger()
 
     count = get_feedback_count()
     return {

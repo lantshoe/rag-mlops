@@ -11,6 +11,15 @@ Run with:
 
 from fastapi import FastAPI
 from src.api.routes import router
+from contextlib import asynccontextmanager
+from src.training.scheduler import start_schedule_trigger
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Runs once when the server starts
+    start_schedule_trigger()
+    yield
 
 app = FastAPI(
     title="RAG MLOps System",
