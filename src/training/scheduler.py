@@ -50,6 +50,9 @@ def check_threshold_trigger():
             daemon=True
         )
         thread.start()
+def get_last_trained_count() -> int:
+    with _lock:
+        return _last_trained_feedback_count
 
 def start_schedule_trigger():
     def _loop():

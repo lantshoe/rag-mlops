@@ -13,6 +13,7 @@ from fastapi import FastAPI
 from src.api.routes import router
 from contextlib import asynccontextmanager
 from src.training.scheduler import start_schedule_trigger
+from fastapi.middleware.cors import CORSMiddleware
 
 
 @asynccontextmanager
@@ -26,5 +27,11 @@ app = FastAPI(
     description="A RAG pipeline with feedback loop and MLOps integration",
     version="0.1.0"
 )
-
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],  # Vite's default port
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 app.include_router(router)

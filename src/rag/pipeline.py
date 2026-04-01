@@ -37,7 +37,7 @@ class RAGPipeline:
         # load the CrossEncoder reranker
         if os.path.exists(RERANKER_MODEL_PATH):
             print(f"Loading model from {RERANKER_MODEL_PATH}")
-            self.reranker = CrossEncoder(model_path=RERANKER_MODEL_PATH, num_labels=1)
+            self.reranker = CrossEncoder(model_name_or_path=RERANKER_MODEL_PATH, num_labels=1)
         else:
             print("Fine-tuned reranker not found, using base model...")
             self.reranker = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2", num_labels=1)

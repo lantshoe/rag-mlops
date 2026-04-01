@@ -21,7 +21,15 @@ router = APIRouter()
 FILE_PATH = "data/11OSproject.docx"
 custom_pipeline = RAGPipeline(file_path=FILE_PATH)
 llama_index_pipeline = LlamaIndexPipeline(file_path=FILE_PATH)
+from src.feedback.collector import save_feedback, get_feedback_count, get_feedback_stats
+from src.training.scheduler import get_last_trained_count  # we'll add this below
 
+@router.get("/feedback/stats")
+def feedback_stats():
+    stats = get_feedback_stats()
+    last_trained = get_last_trained_count()
+    stats["since_last_training"] = stats["total"] - last_trained
+    return stats
 
 @router.get("/health")
 def health_check():

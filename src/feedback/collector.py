@@ -17,6 +17,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from src.feedback.models import Base, Feedback
 from dotenv import load_dotenv
+from sqlalchemy import func
 
 load_dotenv()
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -24,6 +25,26 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 engine = create_engine(DATABASE_URL)
 Base.metadata.create_all(engine)
 Session = sessionmaker(bind=engine)
+
+def get_feedback_stats() -> dict:
+    session = Session()
+    try:
+        total = session.query(Feedback).count()
+        avg_score = session.query(func.avg(Feedback.score)).scalar()
+
+        last_feedback = (
+            session.query(Feedback)
+            .order_by(Feedback.created_at.desc())
+            .first()
+        )
+
+        return {
+            "total": total,
+            "avg_score": round(float(avg_score), 2) if avg_score else 0.0,
+            "last_feedback_at": last_feedback.created_at.isoformat() if last_feedback else None,
+        }
+    finally:
+        session.close()
 
 def save_feedback(question: str,
                   answer: str,
