@@ -26,7 +26,7 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(_
 RERANKER_MODEL_PATH = os.path.join(PROJECT_ROOT, "models", "reranker")
 
 class RAGPipeline:
-    def __init__(self, file_path: str, top_k: int = 10, top_n = 3):
+    def __init__(self, data_dir: str, top_k: int = 10, top_n = 3):
         self.embedder = Embedder()
         # retrieve from FAISS
         self.top_k = top_k
@@ -54,15 +54,31 @@ class RAGPipeline:
         # load
         if not self.indexer.load():
             print("No saved index found, building from scratch...")
-            docs = load_documents(file_path)
-            nodes = split_documents(docs)
-            source = os.path.basename(file_path)
-            # embedder converts chunks and query into vectors
-            # indexer stores vectors and retrieves efficiently
-            self.indexer.build(nodes, self.embedder,source=source)
-            self.indexer.save()
+            self._build_from_folder(data_dir)
         else:
             print("Index loaded from disk, skipping rebuild")
+
+    def _build_from_folder(self, data_dir:str):
+        supported = {".docx",".pdf",".txt"}
+        if not os.path.exists(data_dir):
+            print(f"Directory {data_dir} not found, skipping build")
+            return
+        files = [
+            f for f in os.listdir(data_dir)
+            if os.path.splitext(f)[1].lower() in supported
+        ]
+        if not files:
+            print(f"No supported files found in '{data_dir}'.")
+            return
+
+        for filename in files:
+            file_path = os.path.join(data_dir, filename)
+            docs = load_documents(file_path)
+            nodes = split_documents(docs)
+            self.indexer.build(nodes, self.embedder,source=filename)
+        self.indexer.save()
+        print(f"Built index from {len(files)} file(s) in '{data_dir}'.")
+
 
     def _rerank(self, question:str, chunks:list) -> list:
         """

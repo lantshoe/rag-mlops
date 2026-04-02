@@ -11,6 +11,7 @@ direction between vectors rather than their magnitude.
 - search: embed query -> normalize -> find top-k similar chunks
 - save: save index to FAISS index and save chunks to disk
 - load: load index from FAISS index and load chunks from disk
+- delete_by_source: remove chunks from a specific file and rebuild index
 """
 import faiss
 from src.rag.embedder import Embedder
@@ -72,3 +73,23 @@ class FAISSIndexer:
                 "score": float(score)
             })
         return result
+
+    def delete_by_source(self, source:str, embedder: Embedder):
+        before = len(self.chunks)
+        remaining_chunks = [c for c in self.chunks if c["source"]!=source]
+        removed_count = before - len(remaining_chunks)
+        if removed_count==0:
+            print(f"No chunks found for '{source}'")
+            return 0
+
+        self.chunks = []
+        self.index = faiss.IndexFlatIP(self.dimension)
+        if remaining_chunks:
+            texts = [c["text"] for c in remaining_chunks]
+            embeddings = embedder.embed(texts)
+            faiss.normalize_L2(embeddings)
+            self.chunks = remaining_chunks
+            self.index.add(embeddings)
+        self.save()
+        print(f"Deleted {removed_count} chunks from '{source}'. Index rebuilt with {self.index.ntotal} vectors.")
+        return removed_count

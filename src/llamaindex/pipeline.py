@@ -27,19 +27,48 @@ from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from llama_index.llms.ollama import Ollama
 from src.rag.loader import load_documents, split_documents
 from llama_index.core.settings import Settings
+import os
 
 
 class LlamaIndexPipeline:
-    def __init__(self, file_path: str, top_k: int = 3):
+    def __init__(self, data_dir: str, top_k: int = 3):
         Settings.llm = Ollama(model="llama3.1:8b", request_timeout=300)
         Settings.embed_model = HuggingFaceEmbedding(
             model_name="all-MiniLM-L6-v2"
         )
         self.top_k = top_k
-        docs = load_documents(file_path)
-        nodes = split_documents(docs)
-        self.index = VectorStoreIndex(nodes)
+        all_nodes = self._load_all_nodes(data_dir)
+
+        self.index = VectorStoreIndex(all_nodes)
         self.query_engine = self.index.as_query_engine(similarity_topk=self.top_k)
+
+    def _load_all_nodes(self, data_dir: str) -> list:
+        """Load and chunk all supported files from the data folder."""
+        supported = {".docx", ".pdf", ".txt"}
+        all_nodes = []
+
+        if not os.path.exists(data_dir):
+            print(f"Data folder '{data_dir}' not found, starting with empty index.")
+            return all_nodes
+
+        files = [
+            f for f in os.listdir(data_dir)
+            if os.path.splitext(f)[1].lower() in supported
+        ]
+
+        if not files:
+            print(f"No supported files found in '{data_dir}'.")
+            return all_nodes
+
+        for filename in files:
+            file_path = os.path.join(data_dir, filename)
+            print(f"LlamaIndex: indexing '{filename}'...")
+            docs = load_documents(file_path)
+            nodes = split_documents(docs)
+            all_nodes.extend(nodes)
+
+        print(f"LlamaIndex: indexed {len(all_nodes)} chunks from {len(files)} file(s).")
+        return all_nodes
 
     def query(self, question: str):
         response = self.query_engine.query(question)

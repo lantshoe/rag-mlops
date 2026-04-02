@@ -16,3 +16,4 @@ src/training/checkpoints/
 src/training/mlruns/
 src/training/mlflow.db
 models/
+data/

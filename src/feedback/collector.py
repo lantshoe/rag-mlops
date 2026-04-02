@@ -15,9 +15,10 @@ import json
 import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from src.feedback.models import Base, Feedback
 from dotenv import load_dotenv
 from sqlalchemy import func
+from src.feedback.models import Base, Feedback, Document
+
 
 load_dotenv()
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -90,3 +91,47 @@ def get_feedback_count() -> int:
         return session.query(Feedback).count()
     finally:
         session.close()
+
+def get_all_documents() -> list:
+    session = Session()
+    try:
+        return session.query(Document).order_by(Document.updated_at.desc()).all()
+    finally:
+        session.close()
+
+def save_document(filename:str, file_path:str, chunk_count:int) -> Document:
+    session = Session()
+    try:
+        doc = Document(
+            filename=filename,
+            file_path=file_path,
+            chunk_count=chunk_count
+        )
+        session.add(doc)
+        session.commit()
+        session.refresh(doc)
+        print(f"Document saved: {filename}")
+        return doc
+    finally:
+        session.close()
+
+def delete_document(filename: str) -> bool:
+    session = Session()
+    try:
+        doc = session.query(Document).filter(Document.filename == filename).first()
+        if not doc:
+            return False
+        session.delete(doc)
+        session.commit()
+        print(f"Document deleted from DB: '{filename}'")
+        return True
+    finally:
+        session.close()
+
+def document_exists(filename: str) -> bool:
+    session = Session()
+    try:
+        return session.query(Document).filter(Document.filename == filename).first() is not None
+    finally:
+        session.close()
+
