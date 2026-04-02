@@ -4,7 +4,7 @@ schema.py
 Pydantic models for API request and response validation.
 FastAPI uses these to automatically validate incoming requests and serialize outgoing responses.
 """
-
+from typing import Optional
 from pydantic import BaseModel
 
 
@@ -18,7 +18,7 @@ class ChunkResult(BaseModel):
     text: str
     score: float
     source: str
-    reranker_score: float
+    reranker_score: Optional[float] = None
     chunk_id: int
 
 
