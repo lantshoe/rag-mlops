@@ -65,7 +65,8 @@ def query(request: QueryRequest) -> QueryResponse:
                 for c in result["retrieved_chunks"]
             ]
         )
-
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
