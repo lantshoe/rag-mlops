@@ -17,3 +17,6 @@ src/training/mlruns/
 src/training/mlflow.db
 models/
 data/
+notebooks/.ipynb_checkpoints
+notebooks/indexes
+notebooks/*.png

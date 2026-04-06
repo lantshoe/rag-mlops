@@ -16,7 +16,7 @@ Flow:
 """
 from ollama import Client
 from sentence_transformers import CrossEncoder
-
+from src.rag.prompts import RAG_PROMPT_TEMPLATE
 from src.rag.embedder import Embedder
 from src.rag.indexer import FAISSIndexer
 from src.rag.loader import load_documents, split_documents
@@ -42,15 +42,7 @@ class RAGPipeline:
             print("Fine-tuned reranker not found, using base model...")
             self.reranker = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2", num_labels=1)
 
-        self.PROMPT_TEMPLATE = """You are a helpful assistant. Answer the question based only on the context provided below.
-                                If the answer is not found in the context, say "I don't know based on the provided document."
-
-                                Context:
-                                {context}
-
-                                Question: {query}
-
-                                Answer:"""
+        self.PROMPT_TEMPLATE = RAG_PROMPT_TEMPLATE
         # load
         if not self.indexer.load():
             print("No saved index found, building from scratch...")
@@ -96,7 +88,7 @@ class RAGPipeline:
         context = "\n\n".join(
             [f"[Chunk {i + 1}]:\n{c['text']}" for i, c in enumerate(chunks)]
         )
-        prompt = self.PROMPT_TEMPLATE.format(context=context, query=query)
+        prompt = self.PROMPT_TEMPLATE.format(context_str=context, query_str=query)
         return prompt
 
     def query(self, question: str) -> dict:

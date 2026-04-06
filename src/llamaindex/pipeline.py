@@ -22,12 +22,13 @@ _build_prompt() (manual)            as_query_engine() (auto)
     ↓                                   ↓
 client.chat() (manual)              query_engine.query() (auto)
 """
-from llama_index.core import VectorStoreIndex
+from llama_index.core import VectorStoreIndex, PromptTemplate
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from llama_index.llms.ollama import Ollama
 from src.rag.loader import load_documents, split_documents
 from llama_index.core.settings import Settings
 import os
+from src.rag.prompts import RAG_PROMPT_TEMPLATE
 
 
 class LlamaIndexPipeline:
@@ -40,7 +41,10 @@ class LlamaIndexPipeline:
         all_nodes = self._load_all_nodes(data_dir)
 
         self.index = VectorStoreIndex(all_nodes)
-        self.query_engine = self.index.as_query_engine(similarity_topk=self.top_k)
+        self.query_engine = self.index.as_query_engine(
+            similarity_top_k=self.top_k,
+            text_qa_template = PromptTemplate(RAG_PROMPT_TEMPLATE)
+        )
 
     def _load_all_nodes(self, data_dir: str) -> list:
         """Load and chunk all supported files from the data folder."""
