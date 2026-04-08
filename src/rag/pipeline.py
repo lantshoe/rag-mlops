@@ -14,6 +14,8 @@ Flow:
         - return the generated answer and retrieved chunks
 
 """
+from collections import defaultdict
+
 from ollama import Client
 from sentence_transformers import CrossEncoder
 from src.rag.prompts import RAG_PROMPT_TEMPLATE
@@ -75,6 +77,9 @@ class RAGPipeline:
     def _rerank(self, question:str, chunks:list) -> list:
         """
         re-rank chunks using CrossEncoder
+        return
+        ------
+        [{"text":"","chunk_id":"", "score":0, "reranker_score":0}]
         """
         paris = [[question, chunk["text"]] for chunk in chunks]
 
@@ -91,15 +96,48 @@ class RAGPipeline:
         prompt = self.PROMPT_TEMPLATE.format(context_str=context, query_str=query)
         return prompt
 
+    def _expand_chunks(self, reranked_chunks, chunks, window) -> list:
+        source_chunks = defaultdict(list)
+        for chunk in chunks:
+            source_chunks[chunk["source"]].append(chunk)
+
+        # sort chunks in every source in order to apply window
+        for source in source_chunks:
+            source_chunks[source] = sorted(source_chunks[source], key=lambda x: x["chunk_id"])
+
+        selected_ids = {(c["source"], c["chunk_id"]) for c in reranked_chunks}
+
+        expanded = list(reranked_chunks)
+
+        for chunk in reranked_chunks:
+            source = chunk["source"]
+            cid = chunk["chunk_id"]
+            neighbors = source_chunks[source]
+            for neighbor in neighbors:
+                nid = neighbor["chunk_id"]
+                key = (source, nid)
+                if abs(nid - cid) <= window and key not in selected_ids:
+                    selected_ids.add(key)
+                    expanded.append({**neighbor, "reranker_score": None, "is_context": True})
+
+        expanded.sort(key=lambda x: (x["source"], x["chunk_id"]))
+        return expanded
+
     def query(self, question: str) -> dict:
         # retrieve top_k from FAISS
         chunks = self.indexer.search(question, self.embedder, self.top_k)
 
         # rerank using CrossEncoder, keep top_n
         reranked_chunks = self._rerank(question, chunks)
+        
+        expand_chunks = self._expand_chunks(
+            reranked_chunks,
+            self.indexer.chunks,
+            window  = 1
+        )
 
         # build prompt with reranked chunks
-        prompt = self._build_prompt(question, reranked_chunks)
+        prompt = self._build_prompt(question, expand_chunks)
 
         response = self.client.chat(
             model="llama3.1:8b",
@@ -114,5 +152,10 @@ class RAGPipeline:
         return {
             "question": question,
             "answer": response["message"]["content"],
-            "retrieved_chunks": chunks
+            # return reranked_chunks for feedback not all expand_chunks
+            "retrieved_chunks": reranked_chunks
         }
+
+
+
+
