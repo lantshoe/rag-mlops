@@ -29,22 +29,35 @@ from src.rag.loader import load_documents, split_documents
 from llama_index.core.settings import Settings
 import os
 from src.rag.prompts import RAG_PROMPT_TEMPLATE
+from llama_index.core import StorageContext, load_index_from_storage
 
-
+LLAMA_INDEX_PATH = "indexes/llama_index"
 class LlamaIndexPipeline:
     def __init__(self, data_dir: str, top_k: int = 3):
-        Settings.llm = Ollama(model="llama3.1:8b", request_timeout=300)
+        Settings.llm = Ollama(model="llama3.1:8b", request_timeout=300,temperature=0.1)
         Settings.embed_model = HuggingFaceEmbedding(
             model_name="all-MiniLM-L6-v2"
         )
         self.top_k = top_k
-        all_nodes = self._load_all_nodes(data_dir)
+        self.data_dir = data_dir
 
-        self.index = VectorStoreIndex(all_nodes)
+        if os.path.exists(LLAMA_INDEX_PATH):
+            print("LlamaIndex: loading index from disk...")
+            storage_context = StorageContext.from_defaults(persist_dir=LLAMA_INDEX_PATH)
+            self.index = load_index_from_storage(storage_context)
+        else:
+            print("LlamaIndex: building index from scratch...")
+            self.build_from_disk()
+
         self.query_engine = self.index.as_query_engine(
             similarity_top_k=self.top_k,
-            text_qa_template = PromptTemplate(RAG_PROMPT_TEMPLATE)
+            text_qa_template=PromptTemplate(RAG_PROMPT_TEMPLATE),
         )
+
+    def build_from_disk(self):
+        all_nodes = self._load_all_nodes(self.data_dir)
+        self.index = VectorStoreIndex(all_nodes)
+        self.index.storage_context.persist(persist_dir=LLAMA_INDEX_PATH)
 
     def _load_all_nodes(self, data_dir: str) -> list:
         """Load and chunk all supported files from the data folder."""

@@ -38,7 +38,7 @@ class FAISSIndexer:
 
         self.chunks.extend(new_chunks)
         self.index.add(embeddings)
-        print(f"Index built with {self.index.ntotal} vectors from '{source}'")
+        print(f"Index built with {len(new_chunks)} vectors from '{source}'")
 
     def save(self):
         os.makedirs(os.path.dirname(self.index_path), exist_ok=True)

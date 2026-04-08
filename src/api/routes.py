@@ -120,6 +120,7 @@ async def upload_document(file: UploadFile = File(...)):
         nodes = split_documents(docs)
         custom_pipeline.indexer.build(nodes, custom_pipeline.embedder, source=file.filename)
         custom_pipeline.indexer.save()
+        llama_index_pipeline.build_from_disk()
     except Exception as e:
         # Clean up file if indexing fails
         os.remove(file_path)
