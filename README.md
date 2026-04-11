@@ -123,14 +123,29 @@ source venv/bin/activate       # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-### 3. Configure environment variables
+### 3. Environment Configuration
 
-Create a `.env` file in the project root:
+This project uses separate env files for different environments:
 
+| File | Purpose | 
+|------|---------|
+| `.env.dev` | Local development (localhost URLs) |
+| `.env.docker` | Docker environment |
+
+### `.env.dev` (local development)
 ```env
 DATABASE_URL=postgresql://raguser:ragpassword@localhost:5432/ragdb
 MLFLOW_TRACKING_URI=http://localhost:5001
+# OLLAMA_HOST not set — defaults to http://localhost:11434
 ```
+
+### `.env.docker` (Docker)
+```env
+DATABASE_URL=postgresql://raguser:ragpassword@postgres:5432/ragdb
+MLFLOW_TRACKING_URI=http://mlflow:5000
+OLLAMA_HOST=http://host.docker.internal:11434
+```
+
 
 ### 4. Pull the LLM
 
@@ -177,10 +192,7 @@ Make sure Docker and Docker Compose are installed, then:
 
 ```bash
 # Copy and configure environment
-cp .env.example .env
-
-# Build and start all services
-docker-compose up --build
+docker-compose --env-file .env.docker up --build
 ```
 
 | Service      | URL                      |
