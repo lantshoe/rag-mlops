@@ -35,7 +35,7 @@ class RAGPipeline:
         # keep only the best after rerank
         self.top_n = top_n
         self.indexer = FAISSIndexer()
-        self.client = Client()
+        self.client = Client(host=os.getenv("OLLAMA_HOST", "http://localhost:11434"))
         # load the CrossEncoder reranker
         if os.path.exists(RERANKER_MODEL_PATH):
             print(f"Loading model from {RERANKER_MODEL_PATH}")

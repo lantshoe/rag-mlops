@@ -34,7 +34,12 @@ from llama_index.core import StorageContext, load_index_from_storage
 LLAMA_INDEX_PATH = "indexes/llama_index"
 class LlamaIndexPipeline:
     def __init__(self, data_dir: str, top_k: int = 3):
-        Settings.llm = Ollama(model="llama3.1:8b", request_timeout=300,temperature=0.1)
+        Settings.llm = Ollama(
+            model="llama3.1:8b",
+            base_url=os.getenv("OLLAMA_HOST", "http://localhost:11434"),
+            request_timeout=300,
+            temperature=0.1,
+        )
         Settings.embed_model = HuggingFaceEmbedding(
             model_name="all-MiniLM-L6-v2"
         )
