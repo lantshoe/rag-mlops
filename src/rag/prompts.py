@@ -14,3 +14,12 @@ Context:
 Question: {query_str}
 
 Answer:"""
+
+
+RAG_SUMMARIZE_TEMPLATE = """Read the following document and write a comprehensive summary 
+covering all main topics, key concepts, and important details.
+
+Document:
+{full_text}
+
+Summary:"""

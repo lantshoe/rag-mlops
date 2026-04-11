@@ -36,5 +36,6 @@ class Document(Base):
     filename = Column(String(255), nullable=False)
     file_path = Column(Text, nullable=False)
     chunk_count = Column(Integer, default=0)
+    summary = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.now)
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)

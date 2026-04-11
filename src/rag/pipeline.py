@@ -18,7 +18,7 @@ from collections import defaultdict
 
 from ollama import Client
 from sentence_transformers import CrossEncoder
-from src.rag.prompts import RAG_PROMPT_TEMPLATE
+from src.rag.prompts import RAG_PROMPT_TEMPLATE, RAG_SUMMARIZE_TEMPLATE
 from src.rag.embedder import Embedder
 from src.rag.indexer import FAISSIndexer
 from src.rag.loader import load_documents, split_documents
@@ -155,6 +155,35 @@ class RAGPipeline:
             # return reranked_chunks for feedback not all expand_chunks
             "retrieved_chunks": reranked_chunks
         }
+
+    def summarize(self, filename: str) -> dict:
+        chunks = [
+            c for c in self.indexer.chunks
+            if c["source"] == filename
+        ]
+        if not chunks:
+            print(f"No chunks found in '{filename}'.")
+            return {}
+
+        full_context = "\n\n".join(c["text"] for c in chunks)
+
+        response = self.client.chat(
+            model="llama3.1:8b",
+            messages=[
+                {"role": "user",
+                 "content":RAG_SUMMARIZE_TEMPLATE.format(full_text=full_context)
+}
+            ],
+            options = {"temperature": 0.1}
+        )
+        summary = response["message"]["content"]
+        return {
+            "filename": filename,
+            "summary": summary,
+            "chunk_count": len(chunks)
+        }
+
+
 
 
 

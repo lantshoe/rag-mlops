@@ -133,3 +133,26 @@ def document_exists(filename: str) -> bool:
     finally:
         session.close()
 
+def save_document_summary(filename: str, summary: str):
+    if not filename or not summary:
+        print(f"filename or summary is empty: {filename}")
+        return
+    session = Session()
+    try:
+        doc = session.query(Document).filter(Document.filename == filename).first()
+        if doc:
+            doc.summary = summary
+            session.commit()
+    finally:
+        session.close()
+
+
+def query_document_summary(filename: str) -> str:
+    session = Session()
+    try:
+        summary = session.query(Document.summary) \
+            .filter(Document.filename == filename) \
+            .scalar()
+        return summary or ""
+    finally:
+        session.close()

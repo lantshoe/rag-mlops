@@ -8,7 +8,9 @@ Endpoints:
     POST    /query      - send a question and get an answer
     POST    /feedback   - submit a score for an answer
 """
-
+import json
+import traceback
+from urllib.parse import unquote
 import shutil
 from fastapi import APIRouter, HTTPException, UploadFile, File
 from src.api.schemas import QueryRequest, QueryResponse, ChunkResult, FeedbackRequest
@@ -19,7 +21,8 @@ from src.training.scheduler import check_threshold_trigger
 from src.feedback.collector import (
     save_feedback, get_feedback_count,
     save_document, get_all_documents,
-    delete_document, document_exists,get_feedback_stats
+    delete_document, document_exists,get_feedback_stats,
+    save_document_summary,query_document_summary
 )
 from src.rag.loader import load_documents, split_documents
 from src.training.scheduler import get_last_trained_count  # we'll add this below
@@ -70,6 +73,22 @@ def query(request: QueryRequest) -> QueryResponse:
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.post("/documents/{filename}/summary")
+def summarize_document(filename:str):
+    filename = unquote(filename)
+    if not document_exists(filename):
+        raise HTTPException(status_code=404, detail="Document not found")
+    try:
+        summary =  query_document_summary(filename)
+        if not summary:
+            summary = custom_pipeline.summarize(filename=filename)
+            save_document_summary(filename, json.dumps(summary))
+            return {"status": "ok", "data": summary}
+        else:
+            return {"status": "ok", "data": json.loads(summary)}
+    except Exception as e:
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500)
 
 @router.post("/feedback")
 def feedback(request: FeedbackRequest):
