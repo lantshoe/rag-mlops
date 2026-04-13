@@ -21,17 +21,18 @@ from src.training.scheduler import check_threshold_trigger
 from src.feedback.collector import (
     save_feedback, get_feedback_count,
     save_document, get_all_documents,
-    delete_document, document_exists,get_feedback_stats,
-    save_document_summary,query_document_summary
+    delete_document, document_exists, get_feedback_stats,
+    save_document_summary, query_document_summary
 )
 from src.rag.loader import load_documents, split_documents
 from src.training.scheduler import get_last_trained_count  # we'll add this below
-
+from fastapi.responses import StreamingResponse
 
 router = APIRouter()
 DATA_DIR = "data"
 custom_pipeline = RAGPipeline(data_dir=DATA_DIR)
 llama_index_pipeline = LlamaIndexPipeline(data_dir=DATA_DIR)
+
 
 @router.get("/feedback/stats")
 def feedback_stats():
@@ -40,55 +41,85 @@ def feedback_stats():
     stats["since_last_training"] = stats["total"] - last_trained
     return stats
 
+
 @router.get("/health")
 def health_check():
     return {"message": "OK"}
 
 
-@router.post("/query", response_model=QueryResponse)
-def query(request: QueryRequest) -> QueryResponse:
-    try:
-        if request.pipeline == "custom":
-            result = custom_pipeline.query(request.question)
-        elif request.pipeline == "llamaindex":
-            result = llama_index_pipeline.query(request.question)
-        else:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Unknown pipeline: {request.pipeline}. Use 'custom' or 'llamaindex'."
-            )
-        return QueryResponse(
-            question=result['question'],
-            answer=result['answer'],
-            pipeline=request.pipeline,
-            retrieved_chunks=[
-                ChunkResult(text=c["text"], score=c["score"],
-                            source=c["source"], reranker_score=c.get("reranker_score"),
-                            chunk_id=c["chunk_id"])
-                for c in result["retrieved_chunks"]
-            ]
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+@router.post("/query/stream")
+def query_stream(request: QueryRequest):
+    """
+       Streaming query endpoint.
 
-@router.post("/documents/{filename}/summary")
-def summarize_document(filename:str):
+       Returns a text/event-stream with two event types:
+       - data: {"type": "chunks", "chunks": [...]}
+       - data: {"type": "token", "token": "..."}
+       - data: {"type": "done"}
+       """
+
+    def generate():
+        try:
+            request_type = request.pipeline
+            question = request.question
+            if request_type == "custom":
+                token_generator, retrieved_chunks = custom_pipeline.query_stream(question)
+            elif request.pipeline == "llamaindex":
+                token_generator, retrieved_chunks = llama_index_pipeline.query_stream(question)
+            else:
+                yield f"data: {json.dumps({'type': 'error', 'message': f'Unknown pipeline: {request.pipeline}'})}\n\n"
+                return
+            chunks_payload = [
+                {
+                    "text": c["text"],
+                    "score": c["score"],
+                    "reranker_score": c.get("reranker_score"),
+                    "source": c["source"],
+                    "chunk_id": c["chunk_id"]
+                }
+                for c in retrieved_chunks
+            ]
+            yield f"data: {json.dumps({'type': 'chunks', 'chunks': chunks_payload})}\n\n"
+            for token in token_generator:
+                yield f"data: {json.dumps({'type': 'token', 'token': token})}\n\n"
+            # signal end of stream
+            yield f"data: {json.dumps({'type': 'done'})}\n\n"
+        except Exception as e:
+            print(traceback.format_exc())
+            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        }
+    )
+
+@router.post("/documents/{filename}/summary/stream")
+def summarize_document_stream(filename: str):
     filename = unquote(filename)
     if not document_exists(filename):
         raise HTTPException(status_code=404, detail="Document not found")
-    try:
-        summary =  query_document_summary(filename)
-        if not summary:
-            summary = custom_pipeline.summarize(filename=filename)
-            save_document_summary(filename, json.dumps(summary))
-            return {"status": "ok", "data": summary}
-        else:
-            return {"status": "ok", "data": json.loads(summary)}
-    except Exception as e:
-        print(traceback.format_exc())
-        raise HTTPException(status_code=500)
+
+    def generate():
+        try:
+            generator = custom_pipeline.summarize_stream(filename)
+            for token in generator:
+                yield f"data: {json.dumps({'type': 'token', 'token': token})}\n\n"
+            yield f"data: {json.dumps({'type': 'done'})}\n\n"
+        except Exception as e:
+            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        }
+    )
+
 
 @router.post("/feedback")
 def feedback(request: FeedbackRequest):
@@ -104,7 +135,7 @@ def feedback(request: FeedbackRequest):
         score=request.score,
         pipeline=request.pipeline,
         comment=request.comment,
-        retrieved_chunks = request.retrieved_chunks
+        retrieved_chunks=request.retrieved_chunks
     )
     check_threshold_trigger()
 
@@ -114,6 +145,7 @@ def feedback(request: FeedbackRequest):
         "message": "Feedback saved",
         "total_feedback_count": count
     }
+
 
 @router.post("/upload")
 async def upload_document(file: UploadFile = File(...)):

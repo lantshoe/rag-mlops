@@ -23,12 +23,14 @@ from src.rag.embedder import Embedder
 from src.rag.indexer import FAISSIndexer
 from src.rag.loader import load_documents, split_documents
 import os
+from typing import Generator, Any
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 RERANKER_MODEL_PATH = os.path.join(PROJECT_ROOT, "models", "reranker")
 
+
 class RAGPipeline:
-    def __init__(self, data_dir: str, top_k: int = 10, top_n = 3):
+    def __init__(self, data_dir: str, top_k: int = 10, top_n=3):
         self.embedder = Embedder()
         # retrieve from FAISS
         self.top_k = top_k
@@ -52,8 +54,8 @@ class RAGPipeline:
         else:
             print("Index loaded from disk, skipping rebuild")
 
-    def _build_from_folder(self, data_dir:str):
-        supported = {".docx",".pdf",".txt"}
+    def _build_from_folder(self, data_dir: str):
+        supported = {".docx", ".pdf", ".txt"}
         if not os.path.exists(data_dir):
             print(f"Directory {data_dir} not found, skipping build")
             return
@@ -69,12 +71,11 @@ class RAGPipeline:
             file_path = os.path.join(data_dir, filename)
             docs = load_documents(file_path)
             nodes = split_documents(docs)
-            self.indexer.build(nodes, self.embedder,source=filename)
+            self.indexer.build(nodes, self.embedder, source=filename)
         self.indexer.save()
         print(f"Built index from {len(files)} file(s) in '{data_dir}'.")
 
-
-    def _rerank(self, question:str, chunks:list) -> list:
+    def _rerank(self, question: str, chunks: list) -> list:
         """
         re-rank chunks using CrossEncoder
         return
@@ -123,68 +124,54 @@ class RAGPipeline:
         expanded.sort(key=lambda x: (x["source"], x["chunk_id"]))
         return expanded
 
-    def query(self, question: str) -> dict:
-        # retrieve top_k from FAISS
+    def query_stream(self, question: str) -> tuple[Generator, list]:
         chunks = self.indexer.search(question, self.embedder, self.top_k)
-
-        # rerank using CrossEncoder, keep top_n
         reranked_chunks = self._rerank(question, chunks)
-        
-        expand_chunks = self._expand_chunks(
-            reranked_chunks,
-            self.indexer.chunks,
-            window  = 1
-        )
-
-        # build prompt with reranked chunks
+        expand_chunks = self._expand_chunks(reranked_chunks, self.indexer.chunks, window=1)
         prompt = self._build_prompt(question, expand_chunks)
 
-        response = self.client.chat(
-            model="llama3.1:8b",
-            messages=[{"role": "user", "content": prompt}],
-            # With `temperature=0.1`, the model will almost always pick the highest probability path, giving much more consistent answers while still sounding natural.
-            # temperature = 0.0  → always picks the highest probability word
-            # temperature = 1.0  → full randomness (default)
-            options = {
-                "temperature": 0.1
-            }
-        )
-        return {
-            "question": question,
-            "answer": response["message"]["content"],
-            # return reranked_chunks for feedback not all expand_chunks
-            "retrieved_chunks": reranked_chunks
-        }
+        def generate():
+            stream = self.client.chat(
+                model="llama3.1:8b",
+                messages=[{"role": "user", "content": prompt}],
+                # With `temperature=0.1`, the model will almost always pick the highest probability path, giving much more consistent answers while still sounding natural.
+                # temperature = 0.0  → always picks the highest probability word
+                # temperature = 1.0  → full randomness (default)
+                options={"temperature": 0.1},
+                stream=True,
+            )
+            for chunk in stream:
+                token = chunk["message"]["content"]
+                if token:
+                    yield token
 
-    def summarize(self, filename: str) -> dict:
+        return generate(), reranked_chunks
+
+    def summarize_stream(self, filename: str) -> Generator[Any, Any, None] | None:
         chunks = [
             c for c in self.indexer.chunks
             if c["source"] == filename
         ]
         if not chunks:
             print(f"No chunks found in '{filename}'.")
-            return {}
+            return None
 
-        full_context = "\n\n".join(c["text"] for c in chunks)
+        def generate():
+            full_context = "\n\n".join(c["text"] for c in chunks)
 
-        response = self.client.chat(
-            model="llama3.1:8b",
-            messages=[
-                {"role": "user",
-                 "content":RAG_SUMMARIZE_TEMPLATE.format(full_text=full_context)
-}
-            ],
-            options = {"temperature": 0.1}
-        )
-        summary = response["message"]["content"]
-        return {
-            "filename": filename,
-            "summary": summary,
-            "chunk_count": len(chunks)
-        }
+            stream = self.client.chat(
+                model="llama3.1:8b",
+                messages=[
+                    {"role": "user",
+                     "content": RAG_SUMMARIZE_TEMPLATE.format(full_text=full_context)
+                     }
+                ],
+                options={"temperature": 0.1},
+                stream=True
+            )
+            for chunk in stream:
+                token = chunk["message"]["content"]
+                if token:
+                    yield token
 
-
-
-
-
-
+        return generate()

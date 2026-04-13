@@ -30,6 +30,7 @@ from llama_index.core.settings import Settings
 import os
 from src.rag.prompts import RAG_PROMPT_TEMPLATE
 from llama_index.core import StorageContext, load_index_from_storage
+from typing import Generator
 
 LLAMA_INDEX_PATH = "indexes/llama_index"
 class LlamaIndexPipeline:
@@ -92,17 +93,29 @@ class LlamaIndexPipeline:
         print(f"LlamaIndex: indexed {len(all_nodes)} chunks from {len(files)} file(s).")
         return all_nodes
 
-    def query(self, question: str):
-        response = self.query_engine.query(question)
+    def query_stream(self, question: str) -> tuple[Generator, list]:
+        """Streaming version of query() for LlamaIndex pipeline."""
+
+        retriever = self.index.as_retriever(similarity_top_k=self.top_k)
+        source_nodes = retriever.retrieve(question)
+
         retrieved_chunks = [
             {
-                "text": node.text,
-                "score": float(node.score) if node.score else 0.0
+                "text": node.node.text,
+                "score": float(node.score) if node.score else 0.0,
+                "source": node.node.metadata.get("file_name", "unknown"),
+                "chunk_id": 0,
+                "reranker_score": None,
             }
-            for node in response.source_nodes
+            for node in source_nodes
         ]
-        return {
-            "question": question,
-            "answer": str(response),
-            "retrieved_chunks": retrieved_chunks
-        }
+
+        context = "\n\n".join([f"[Chunk {i + 1}]:\n{c['text']}" for i, c in enumerate(retrieved_chunks)])
+        prompt = RAG_PROMPT_TEMPLATE.format(context_str=context, query_str=question)
+        def generate():
+            response = Settings.llm.stream_complete(prompt)
+            for chunk in response:
+                if chunk.delta:
+                    yield chunk.delta
+
+        return generate(), retrieved_chunks
