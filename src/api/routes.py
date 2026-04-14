@@ -9,29 +9,35 @@ Endpoints:
     POST    /feedback   - submit a score for an answer
 """
 import json
+import os
+import shutil
 import traceback
 from urllib.parse import unquote
-import shutil
+
 from fastapi import APIRouter, HTTPException, UploadFile, File
-from src.api.schemas import QueryRequest, QueryResponse, ChunkResult, FeedbackRequest
-import os
-from src.rag.pipeline import RAGPipeline
-from src.llamaindex.pipeline import LlamaIndexPipeline
-from src.training.scheduler import check_threshold_trigger
+from fastapi.responses import StreamingResponse
+
+from src.api.schemas import QueryRequest, FeedbackRequest
 from src.feedback.collector import (
     save_feedback, get_feedback_count,
     save_document, get_all_documents,
     delete_document, document_exists, get_feedback_stats,
     save_document_summary, query_document_summary
 )
+from src.llamaindex.pipeline import LlamaIndexPipeline
 from src.rag.loader import load_documents, split_documents
+from src.rag.pipeline import RAGPipeline
+from src.training.scheduler import check_threshold_trigger
 from src.training.scheduler import get_last_trained_count  # we'll add this below
-from fastapi.responses import StreamingResponse
 
 router = APIRouter()
 DATA_DIR = "data"
 custom_pipeline = RAGPipeline(data_dir=DATA_DIR)
 llama_index_pipeline = LlamaIndexPipeline(data_dir=DATA_DIR)
+
+MAX_FILE_SIZE_MB = 20
+MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024
+ALLOWED_EXTENSIONS = {".docx", ".pdf", ".txt"}
 
 
 @router.get("/feedback/stats")
@@ -97,6 +103,7 @@ def query_stream(request: QueryRequest):
         }
     )
 
+
 @router.post("/documents/{filename}/summary/stream")
 def summarize_document_stream(filename: str):
     filename = unquote(filename)
@@ -124,6 +131,7 @@ def summarize_document_stream(filename: str):
             yield f"data: {json.dumps({'type': 'done'})}\n\n"
         except Exception as e:
             yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+
     return StreamingResponse(
         generate(),
         media_type="text/event-stream",
@@ -163,14 +171,25 @@ def feedback(request: FeedbackRequest):
 @router.post("/upload")
 async def upload_document(file: UploadFile = File(...)):
     # Only allow supported file types
-    allowed_extensions = {".docx", ".pdf", ".txt"}
     ext = os.path.splitext(file.filename)[1].lower()
-    if ext not in allowed_extensions:
+    if ext not in ALLOWED_EXTENSIONS:
         raise HTTPException(status_code=400, detail=f"Unsupported file type: {ext}")
 
     # Check if file already exists
     if document_exists(file.filename):
         raise HTTPException(status_code=400, detail=f"'{file.filename}' is already uploaded.")
+
+    # Check file size
+    contents = await file.read()
+    if len(contents) > MAX_FILE_SIZE_BYTES:
+        raise HTTPException(status_code=400, detail=f"File too large. Maximum size is {MAX_FILE_SIZE_MB}MB.")
+    if len(contents) == 0:
+        raise HTTPException(status_code=400, detail="File is empty.")
+
+    # Sanitize filename — remove path traversal attempts
+    safe_filename = os.path.basename(file.filename)
+    if safe_filename != file.filename:
+        raise HTTPException(status_code=400, detail="Invalid filename.")
 
     # Save file to data/ folder
     os.makedirs(DATA_DIR, exist_ok=True)
