@@ -102,12 +102,25 @@ def summarize_document_stream(filename: str):
     filename = unquote(filename)
     if not document_exists(filename):
         raise HTTPException(status_code=404, detail="Document not found")
+    summary = query_document_summary(filename)
+    if summary:
+        def cached_generate():
+            yield f"data: {json.dumps({'type': 'token', 'token': summary})}\n\n"
+            yield f"data: {json.dumps({'type': 'done'})}\n\n"
+
+        return StreamingResponse(
+            cached_generate(),
+            media_type="text/event-stream"
+        )
 
     def generate():
+        full_text = ""
         try:
             generator = custom_pipeline.summarize_stream(filename)
             for token in generator:
+                full_text += token
                 yield f"data: {json.dumps({'type': 'token', 'token': token})}\n\n"
+            save_document_summary(filename, full_text)
             yield f"data: {json.dumps({'type': 'done'})}\n\n"
         except Exception as e:
             yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
